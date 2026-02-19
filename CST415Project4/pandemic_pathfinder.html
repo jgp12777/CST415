@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pandemic Pathfinder: The Outbreak Oracle</title>
+<style>
+  :root {
+    --bg: #0a0f1a;
+    --panel: #111827;
+    --border: #1e3a5f;
+    --teal: #0d9488;
+    --teal-light: #5eead4;
+    --green: #16a34a;
+    --yellow: #ca8a04;
+    --orange: #ea580c;
+    --red: #dc2626;
+    --blue: #2563eb;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --token: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; font-size: 14px; min-height: 100vh; }
+
+  /* TOP BAR */
+  #topbar {
+    background: #0c1524;
+    border-bottom: 2px solid var(--border);
+    padding: 10px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+  }
+  #topbar h1 { font-size: 18px; color: var(--teal-light); letter-spacing: 1px; }
+  #topbar h1 span { color: var(--muted); font-size: 13px; font-weight: normal; margin-left: 8px; }
+  #stats-bar { display: flex; gap: 18px; align-items: center; }
+  .stat-chip {
+    background: #1a2744; border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; font-size: 13px;
+  }
+  .stat-chip.danger { border-color: var(--red); color: #fca5a5; }
+  .stat-chip.warning { border-color: var(--orange); color: #fdba74; }
+  #token-display { color: var(--token); font-weight: bold; }
+
+  /* MAIN GRID */
+  #game { display: grid; grid-template-columns: 200px 1fr 220px; grid-template-rows: auto 1fr; gap: 1px; background: var(--border); height: calc(100vh - 52px); }
+  .panel { background: var(--panel); padding: 12px; overflow-y: auto; }
+
+  /* CITY MAP */
+  #map-panel h2, #matrix-panel h2, #forecast-panel h2 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+  #district-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .district-tile:focus { outline: 2px dotted var(--teal); }
+  .district-tile {
+    border-radius: 8px; border: 2px solid transparent;
+    padding: 10px 8px; cursor: pointer; transition: all .2s;
+    text-align: center; position: relative;
+  }
+  .district-tile:hover { filter: brightness(1.2); }
+  .district-tile.selected { border-color: white; box-shadow: 0 0 10px rgba(255,255,255,.3); }
+  .district-tile .d-name { font-weight: bold; font-size: 13px; }
+  .district-tile .d-inf { font-size: 11px; margin-top: 4px; color: #fff; opacity: .8; }
+  .d-susceptible { background: #14532d; }
+  .d-exposed     { background: #854d0e; }
+  .d-infectious  { background: #9a3412; }
+  .d-hospitalized { background: #7c2d12; }
+  .d-deceased    { background: #450a0a; }
+  .d-recovering  { background: #1e3a5f; }
+
+  /* MATRIX PANEL */
+  #matrix-panel { grid-column: 2; }
+  #district-label { font-size: 15px; font-weight: bold; color: var(--teal-light); margin-bottom: 8px; }
+  #matrix-wrap { overflow-x: auto; margin-bottom: 12px; }
+  .matrix-table { border-collapse: collapse; font-size: 12px; width: 100%; }
+  .matrix-table th {
+    background: #1e3a5f; padding: 5px 8px; text-align: center;
+    font-weight: 600; color: var(--muted);
+  }
+  .matrix-table td {
+    padding: 5px 8px; text-align: center; border: 1px solid #1e3a5f;
+    font-family: monospace; font-size: 12px; transition: background .3s;
+    position: relative;
+  }
+  .matrix-table .row-label { color: var(--muted); font-weight: 600; font-size: 11px; text-align: right; padding-right: 10px; }
+  .cell-highlight { outline: 2px solid var(--token) !important; }
+
+  /* POPULATION BARS */
+  #pop-bars { margin-bottom: 14px; }
+  #pop-bars h3 { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .bar-row { display: flex; align-items: center; margin-bottom: 5px; gap: 6px; }
+  .bar-label { width: 80px; font-size: 12px; color: var(--muted); }
+  .bar-track { flex: 1; height: 14px; background: #1e2d40; border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width .5s; }
+  .bar-pct { width: 38px; font-size: 11px; text-align: right; font-family: monospace; }
+
+  /* POLICIES */
+  #policy-section h3 { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .policy-btn {
+    display: flex; align-items: flex-start; gap: 8px;
+    width: 100%; background: #1a2744; border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; margin-bottom: 6px;
+    cursor: pointer; color: var(--text); text-align: left; transition: all .2s;
+  }
+  .policy-btn:hover:not(:disabled) { background: #1e3a5f; border-color: var(--teal); }
+  .policy-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .policy-btn.active-policy { border-color: var(--token); background: #2d2000; }
+  .policy-icon { font-size: 18px; line-height: 1; }
+  .policy-info { flex: 1; }
+  .policy-name { font-weight: bold; font-size: 13px; }
+  .policy-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .policy-cost { font-size: 11px; color: var(--token); }
+  #deploy-btn {
+    width: 100%; padding: 9px; margin-top: 4px;
+    background: var(--teal); border: none; border-radius: 6px;
+    color: white; font-weight: bold; font-size: 14px; cursor: pointer; transition: background .2s;
+  }
+  #deploy-btn:hover:not(:disabled) { background: #0f766e; }
+  #deploy-btn:disabled { background: #1e3a5f; color: var(--muted); cursor: not-allowed; }
+
+  /* FORECAST PANEL */
+  #forecast-panel { grid-column: 3; }
+  .forecast-bar-row { display: flex; align-items: center; margin-bottom: 7px; gap: 6px; }
+  .forecast-label { width: 90px; font-size: 11px; color: var(--muted); }
+  .forecast-track { flex: 1; height: 12px; background: #1e2d40; border-radius: 3px; overflow: hidden; }
+  .forecast-fill { height: 100%; border-radius: 3px; transition: width .6s; }
+  .forecast-pct { width: 34px; font-size: 11px; text-align: right; font-family: monospace; }
+
+  /* EVENT CARD */
+  #event-card {
+    background: #2d1a00; border: 1px solid var(--orange);
+    border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+    display: none;
+  }
+  #event-card.show { display: block; }
+  #event-card h4 { color: var(--orange); font-size: 12px; margin-bottom: 4px; }
+  #event-card p  { font-size: 12px; color: #fdba74; }
+
+  /* BOTTOM BAR */
+  #bottom-bar {
+    grid-column: 1 / -1; background: #0c1524;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 16px; gap: 12px;
+  }
+  #week-log { font-size: 12px; color: var(--muted); flex: 1; }
+  #week-log span { color: var(--text); }
+  #next-btn {
+    background: var(--green); border: none; border-radius: 6px;
+    padding: 8px 20px; color: white; font-weight: bold; font-size: 14px;
+    cursor: pointer; transition: background .2s; white-space: nowrap;
+  }
+  #next-btn:hover:not(:disabled) { background: #15803d; }
+  #next-btn:disabled { background: #1e3a5f; color: var(--muted); cursor: not-allowed; }
+
+  /* END SCREEN */
+  #end-screen {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.85);
+    z-index: 100; align-items: center; justify-content: center;
+  }
+  #end-screen.show { display: flex; }
+  #end-box {
+    background: var(--panel); border: 2px solid var(--border);
+    border-radius: 14px; padding: 30px; max-width: 640px; width: 95%;
+    max-height: 90vh; overflow-y: auto;
+  }
+  #end-box h2 { font-size: 26px; margin-bottom: 6px; }
+  #end-box .outcome-desc { color: var(--muted); margin-bottom: 18px; }
+  #end-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+  .end-stat { background: #1a2744; border-radius: 8px; padding: 12px 14px; }
+  .end-stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+  .end-stat .value { font-size: 22px; font-weight: bold; margin-top: 4px; }
+  #end-canvas { width: 100%; margin-bottom: 18px; border-radius: 6px; background: #0a0f1a; }
+  #restart-btn {
+    width: 100%; padding: 12px; background: var(--teal); border: none;
+    border-radius: 8px; color: white; font-weight: bold; font-size: 16px; cursor: pointer;
+  }
+  #restart-btn:hover { background: #0f766e; }
+
+  /* WEEK INDICATOR */
+  #week-indicator { font-size: 12px; color: var(--muted); }
+  #week-indicator strong { color: var(--teal-light); font-size: 15px; }
+
+  /* HINT CARD */
+  #hint-card {
+    background: #0d2137; border: 1px solid #2563eb;
+    border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+  }
+  #hint-card h4 { color: #60a5fa; font-size: 12px; margin-bottom: 6px; display:flex; align-items:center; gap:6px; }
+  #hint-toggle { margin-left:auto; background:none; border:1px solid #2563eb; color:#60a5fa;
+    border-radius:4px; padding:1px 7px; font-size:11px; cursor:pointer; }
+  #hint-toggle:hover { background:#1e3a5f; }
+  #hint-body { font-size: 12px; color: #93c5fd; line-height:1.6; }
+  #hint-body .hint-action { font-weight:bold; color:#fff; background:#1e3a5f;
+    border-radius:4px; padding:2px 7px; display:inline-block; margin:3px 0; }
+  #hint-body .hint-reason { color:#94a3b8; font-size:11px; margin-top:4px; }
+  #hint-body .hint-score { margin-top:8px; }
+  .score-bar-wrap { background:#0a0f1a; border-radius:4px; height:10px; overflow:hidden; margin-top:3px; }
+  .score-bar-fill { height:100%; border-radius:4px; transition: width .5s; }
+  #hint-last-grade { font-size:13px; font-weight:bold; margin-top:6px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <h1>🦠 Pandemic Pathfinder <span>The Outbreak Oracle — CST-415 | Joshua Peek | Project 4</span></h1>
+  <div id="stats-bar">
+    <div class="stat-chip" id="week-indicator">Week <strong>1</strong> / 20</div>
+    <div class="stat-chip" id="token-chip">🎫 Tokens: <span id="token-display">5</span></div>
+    <div class="stat-chip" id="dead-chip">☠ Deceased: <span id="dead-display">0.0%</span></div>
+    <div class="stat-chip" id="inf-chip">🔴 Infectious: <span id="inf-display">0.0%</span></div>
+    <div class="stat-chip" id="score-chip">🧠 Score: <span id="score-display" style="color:#60a5fa;font-weight:bold">—</span></div>
+  </div>
+</div>
+
+<!-- MAIN GRID -->
+<div id="game">
+
+  <!-- CITY MAP -->
+  <div class="panel" id="map-panel">
+    <h2>🗺 City Map</h2>
+    <div id="district-grid"></div>
+    <div style="margin-top:14px; font-size:11px; color:var(--muted); line-height:1.6">
+      <div style="margin-bottom:6px; font-size:12px; color:var(--text)">Legend</div>
+      <div>🟢 Susceptible</div>
+      <div>🟡 Infectious rising</div>
+      <div>🟠 Hospitalized rising</div>
+      <div>🔴 Critical</div>
+    </div>
+  </div>
+
+  <!-- MATRIX + POLICIES (center) -->
+  <div class="panel" id="matrix-panel">
+    <div id="district-label">Select a district</div>
+
+    <div id="matrix-wrap">
+      <table class="matrix-table" id="matrix-table">
+        <thead><tr><th></th><th>S</th><th>I</th><th>H</th><th>R</th><th>D</th></tr></thead>
+        <tbody id="matrix-body"></tbody>
+      </table>
+    </div>
+
+    <div id="pop-bars">
+      <h3>District Population</h3>
+      <div id="bars-container"></div>
+    </div>
+
+    <div id="policy-section">
+      <h3>Deploy Policy  <span style="color:var(--muted);font-weight:normal">(target: <span id="policy-target">—</span>)</span></h3>
+      <div id="policy-buttons"></div>
+      <button id="deploy-btn" disabled>Select a policy &amp; district</button>
+    </div>
+  </div>
+
+  <!-- FORECAST PANEL -->
+  <div class="panel" id="forecast-panel">
+    <h2>📈 Steady-State Forecast</h2>
+
+    <!-- HINT CARD -->
+    <div id="hint-card">
+      <h4>🧠 Oracle Hint <button id="hint-toggle">Hide</button></h4>
+      <div id="hint-body">Calculating best move...</div>
+    </div>
+
+    <div id="forecast-bars"></div>
+
+    <div id="event-card">
+      <h4>⚠ Random Event</h4>
+      <p id="event-text"></p>
+    </div>
+
+    <div style="margin-top:12px">
+      <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px">Active Policies</div>
+      <div id="active-policies-list" style="font-size:12px; color:var(--muted)">None</div>
+    </div>
+
+    <div style="margin-top:12px">
+      <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px">Markov Notes</div>
+      <div style="font-size:11px; color:var(--muted); line-height:1.7">
+        Each week: <code style="color:var(--teal-light)">v' = v × T</code><br>
+        D is absorbing (P=1 self-loop)<br>
+        Forecast = T<sup>∞</sup> via power iteration<br>
+        Events perturb T temporarily<br><br>
+        <span style="color:#fbbf24">⚠ H→D is 40% base.<br>Hospital Support is<br>critical to survival.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM BAR -->
+  <div id="bottom-bar">
+    <div id="week-log">Week 1 — Game started. Infectious seed planted in <span id="seed-district"></span>.</div>
+    <button id="next-btn">Advance Week ▶</button>
+  </div>
+
+</div>
+
+<!-- END SCREEN -->
+<div id="end-screen">
+  <div id="end-box">
+    <h2 id="end-title"></h2>
+    <p class="outcome-desc" id="end-desc"></p>
+    <div id="end-stats"></div>
+    <canvas id="end-canvas" height="200"></canvas>
+    <button id="restart-btn">🔄 Play Again</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════════════════
+const STATES = ['S','I','H','R','D'];
+const STATE_NAMES = { S:'Susceptible', I:'Infectious', H:'Hospitalized', R:'Recovered', D:'Deceased' };
+const STATE_COLORS = { S:'#16a34a', I:'#dc2626', H:'#ea580c', R:'#2563eb', D:'#6b7280' };
+const DISTRICTS = ['North','South','East','West'];
+const MAX_WEEKS = 20;
+const LOSE_THRESHOLD = 0.18;   // 18% deceased city-wide — gives player room to recover
+const WIN_THRESHOLD  = 0.02;   // <2% infectious city-wide — achievable with good policy use
+
+// Base transition matrix T[from][to]  S I H R D
+// Tuning rationale (verified by simulation):
+//   WITHOUT policies: city-wide Deceased reaches ~15% by week 20 — genuinely threatening
+//   WITH good policies (Vaccinate + Hospital Support): Deceased stays < 2%, win is reachable
+//   The danger path is I -> H -> D (40% H death rate makes hospital overflow lethal)
+//   Player must use Hospital Support to suppress H->D and Vaccinate to cut new S->I infections
+const BASE_T = [
+  [0.94, 0.06, 0.00, 0.00, 0.00],  // S: 94% safe, 6% infected each week
+  [0.00, 0.40, 0.20, 0.37, 0.03],  // I: 40% linger, 20% hospitalised, 37% recover, 3% die
+  [0.00, 0.00, 0.20, 0.40, 0.40],  // H: 20% linger, 40% recover, 40% die — critical pressure point
+  [0.03, 0.00, 0.00, 0.97, 0.00],  // R: 3% wane back to S, 97% stay immune
+  [0.00, 0.00, 0.00, 0.00, 1.00],  // D: absorbing state
+];
+
+// Policy definitions
+// KEY BALANCE: Hospital Support is the most critical policy.
+//   H->D is 0.40 by default — WITHOUT hospital support, hospitalized patients die at 40%.
+//   Hospital Support cuts H->D by 0.20 (halving it) and boosts H->R dramatically.
+//   Vaccinate cuts the S->I infection pipeline. Stack both to achieve containment.
+const POLICIES = [
+  {
+    id:'vaccinate', name:'Vaccinate', icon:'💉',
+    desc:'S→I -0.03 (cuts new infections)',
+    cost:1, duration:4,
+    delta: T => { const N=deepCopy(T); N[0][0]+=0.03; N[0][1]-=0.03; return clampT(N); },
+    cells:[[0,1]],
+  },
+  {
+    id:'quarantine', name:'Quarantine', icon:'🚧',
+    desc:'S→I -0.03, I→H -0.05 (slows spread)',
+    cost:1, duration:3,
+    delta: T => { const N=deepCopy(T); N[0][0]+=0.03; N[0][1]-=0.03; N[1][2]-=0.05; N[1][3]+=0.05; return clampT(N); },
+    cells:[[0,1],[1,2]],
+  },
+  {
+    id:'hospital', name:'Hospital Support', icon:'🏥',
+    desc:'H→D -0.20, H→R +0.20, I→R +0.08 (critical!)',
+    cost:1, duration:4,
+    delta: T => {
+      const N=deepCopy(T);
+      N[1][3]+=0.08; N[1][2]-=0.05; N[1][4]-=0.03;  // I row: more recover, fewer go to H or die
+      N[2][4]-=0.20; N[2][3]+=0.20;                  // H row: slash death rate, boost recovery
+      return clampT(N);
+    },
+    cells:[[1,3],[2,3],[2,4]],
+  },
+  {
+    id:'awareness', name:'Awareness Campaign', icon:'📢',
+    desc:'R→S -0.02, S→I -0.02 (protect recovered)',
+    cost:1, duration:3,
+    delta: T => { const N=deepCopy(T); N[3][0]-=0.02; N[3][3]+=0.02; N[0][1]-=0.02; N[0][0]+=0.02; return clampT(N); },
+    cells:[[3,0],[0,1]],
+  },
+];
+
+// Random events — tuned to be disruptive but not game-breaking
+// Supply Boost is a positive event (reward for good play)
+// Event fire rate reduced to 10%, severity reduced vs original
+const EVENTS = [
+  { name:'Variant Surge',       prob:0.25, desc:'New variant: I→H +0.05, I→R -0.05 for 2 weeks',
+    duration:2, delta: T => { const N=deepCopy(T); N[1][2]+=0.05; N[1][3]-=0.05; return clampT(N); } },
+  { name:'Hospital Strike',     prob:0.15, desc:'Staff shortage: H→R -0.08, H→D +0.08 for 2 weeks',
+    duration:2, delta: T => { const N=deepCopy(T); N[2][3]-=0.08; N[2][4]+=0.08; return clampT(N); } },
+  { name:'Immunity Waning',     prob:0.15, desc:'Waning immunity: R→S +0.05, R→R -0.05 for 2 weeks',
+    duration:2, delta: T => { const N=deepCopy(T); N[3][0]+=0.05; N[3][3]-=0.05; return clampT(N); } },
+  { name:'Supply Boost',        prob:0.30, desc:'Aid package: I→R +0.06, I→D -0.03 for 3 weeks ✨',
+    duration:3, delta: T => { const N=deepCopy(T); N[1][3]+=0.06; N[1][4]-=0.03; N[1][2]-=0.03; return clampT(N); } },
+  { name:'Misinformation Wave', prob:0.15, desc:'Reduced compliance: S→I +0.03 for 2 weeks',
+    duration:2, delta: T => { const N=deepCopy(T); N[0][1]+=0.03; N[0][0]-=0.03; return clampT(N); } },
+];
+
+// helper for DOM lookup
+function getEl(id) { return document.getElementById(id); }
+
+// ═══════════════════════════════════════════════════════
+//  GAME STATE
+// ═══════════════════════════════════════════════════════
+let G = {};
+
+function initGame() {
+  getEl('end-screen').classList.remove('show');
+
+  G = {
+    week: 1,
+    tokens: 5,
+    selectedDistrict: 0,
+    selectedPolicy: null,
+    districts: DISTRICTS.map((name) => ({
+      name,
+      v: [1.00, 0.00, 0.00, 0.00, 0.00],  // all clean to start
+      T: deepCopy(BASE_T),
+      activePolicies: [],
+      activeEvents: [],
+    })),
+    history: [],
+    lastLog: '',
+    lastEvent: null,
+    gameOver: false,
+    // Hint & scoring system
+    hint: null,                // current best-move recommendation
+    hintVisible: true,         // toggle
+    deploymentsThisWeek: [],   // track {policyId, districtIdx} deployed before Advance
+    totalScore: 0,             // cumulative player score
+    totalPossibleScore: 0,     // cumulative max possible score
+    weekScores: [],            // [{week, playerScore, maxScore, grade, tokensAwarded}]
+  };
+
+  // Seed exactly ONE random district with the outbreak.
+  // Other districts start with a tiny natural exposure (1%) representing
+  // pre-game community spread — makes city-wide stats more realistic.
+  const seedIdx = Math.floor(Math.random() * 4);
+  G.districts[seedIdx].v = [0.88, 0.08, 0.02, 0.02, 0.00];  // seeded district
+  G.districts.forEach((d, i) => {
+    if (i !== seedIdx) d.v = [0.97, 0.02, 0.00, 0.01, 0.00]; // small exposure elsewhere
+  });
+  getEl('seed-district').textContent = DISTRICTS[seedIdx];
+
+  render();
+  G.hint = calcBestMove();
+  renderHint();
+}
+
+// ═══════════════════════════════════════════════════════
+//  MARKOV MATH
+// ═══════════════════════════════════════════════════════
+
+// v' = v × T  (v is row vector 1×5, T is 5×5)
+function stepMarkov(v, T) {
+  return v.map((_, j) => v.reduce((sum, vi, i) => sum + vi * T[i][j], 0));
+}
+
+// Power iteration for steady state: multiply T^k until convergence
+function steadyState(T) {
+  let v = [0.2, 0.2, 0.2, 0.2, 0.2]; // uniform start
+  for (let iter = 0; iter < 500; iter++) {
+    const vNext = stepMarkov(v, T);
+    const diff = vNext.reduce((s, x, i) => s + Math.abs(x - v[i]), 0);
+    v = vNext;
+    if (diff < 0.00001) break;
+  }
+  return v;
+}
+
+function deepCopy(M) { return M.map(r => [...r]); }
+
+// After modifying T, clamp all values to [0,1] and re-normalize rows
+function clampT(T) {
+  return T.map((row, i) => {
+    const clamped = row.map(v => Math.max(0, Math.min(1, v)));
+    // Don't normalize absorbing state D row
+    if (i === 4) return [0,0,0,0,1];
+    const sum = clamped.reduce((a,b)=>a+b,0);
+    return sum > 0 ? clamped.map(v => v / sum) : clamped;
+  });
+}
+
+// Build effective T for a district (base + active policies + active events)
+function effectiveT(d) {
+  let T = deepCopy(d.T);
+  for (const ap of d.activePolicies) {
+    const pol = POLICIES.find(p => p.id === ap.policyId);
+    if (pol) T = pol.delta(T);
+  }
+  for (const ae of d.activeEvents) {
+    T = ae.event.delta(T);
+  }
+  return clampT(T);
+}
+
+// ═══════════════════════════════════════════════════════
+//  GAME LOGIC
+// ═══════════════════════════════════════════════════════
+
+function advanceWeek() {
+  if (G.gameOver) return;
+
+  const logs = [];
+  let eventFired = null;
+
+  // 1. Roll random event (city-wide, one per week, 10% base chance)
+  if (Math.random() < 0.10) {
+    // Weighted selection: accumulate probabilities, pick first that exceeds roll
+    const total = EVENTS.reduce((s,e)=>s+e.prob, 0);
+    const roll = Math.random() * total;
+    let acc = 0;
+    let chosen = EVENTS[EVENTS.length - 1]; // fallback to last
+    for (const ev of EVENTS) {
+      acc += ev.prob;
+      if (roll < acc) { chosen = ev; break; }
+    }
+    eventFired = chosen;
+    for (const d of G.districts) {
+      d.activeEvents.push({ event: chosen, weeksLeft: chosen.duration });
+    }
+    logs.push(`⚠ ${chosen.name}: ${chosen.desc}`);
+    G.lastEvent = chosen;
+  } else {
+    G.lastEvent = null;
+  }
+
+  // 2. Tick all districts
+  for (const d of G.districts) {
+    const T = effectiveT(d);
+    d.v = stepMarkov(d.v, T);
+
+    // Age out policies & events
+    d.activePolicies = d.activePolicies.filter(ap => {--ap.weeksLeft; return ap.weeksLeft > 0;});
+    d.activeEvents   = d.activeEvents.filter(ae => {--ae.weeksLeft; return ae.weeksLeft > 0;});
+  }
+
+  // 3. Score the player's moves this week against the optimal hint
+  const weekResult = scoreWeek();
+  G.weekScores.push(weekResult);
+  G.totalScore += weekResult.playerScore;
+  G.totalPossibleScore += weekResult.maxScore;
+  // Award bonus tokens based on how well player matched optimal play
+  G.tokens += weekResult.tokensAwarded;
+  // Reset deployments tracker for next week
+  G.deploymentsThisWeek = [];
+
+  // 4. Advance week & earn base token
+  G.week++;
+  G.tokens += 1;
+  logs.push(`+${weekResult.tokensAwarded + 1} 🎫 (base +1, bonus +${weekResult.tokensAwarded} for ${weekResult.grade} play)`);
+
+  // 4. Compute city-wide stats
+  const cityV = cityWideV();
+  G.history.push({ week: G.week, cityInf: cityV[1], cityDead: cityV[4] });
+
+  // 5. Check win/loss
+  const deceased = cityV[4];
+  const infectious = cityV[1];  // only count I, not H — H will naturally drain
+  if (deceased >= LOSE_THRESHOLD) {
+    endGame('overwhelmed');
+  } else if (infectious <= WIN_THRESHOLD && G.week > 4) {
+    endGame('containment');
+  } else if (G.week > MAX_WEEKS) {
+    endGame('endemic');
+  }
+
+  // 6. Build log
+  const pct = v => (v*100).toFixed(1)+'%';
+  if (!eventFired) {
+    logs.push(`Week ${G.week} — City Infectious: ${pct(cityV[1])}  Deceased: ${pct(cityV[4])}`);
+  }
+  G.lastLog = logs.join('  |  ');
+
+  render();
+  // Recalculate best move for next week after state has updated
+  if (!G.gameOver) {
+    G.hint = calcBestMove();
+    renderHint();
+  }
+}
+
+function cityWideV() {
+  const sum = [0,0,0,0,0];
+  for (const d of G.districts) d.v.forEach((x,i)=>sum[i]+=x);
+  return sum.map(x=>x/G.districts.length);
+}
+
+function deployPolicy() {
+  if (!G.selectedPolicy || G.selectedDistrict === null || G.tokens < 1) return;
+  const d = G.districts[G.selectedDistrict];
+  const pol = G.selectedPolicy;
+  d.activePolicies.push({ policyId: pol.id, weeksLeft: pol.duration });
+  G.tokens -= pol.cost;
+  G.lastLog = `✅ ${pol.name} deployed to ${d.name} (${pol.duration} weeks remaining)`;
+  // Track this deployment for scoring
+  G.deploymentsThisWeek.push({ policyId: pol.id, districtIdx: G.selectedDistrict });
+  G.selectedPolicy = null;
+  render();
+}
+
+function endGame(outcome) {
+  G.gameOver = true;
+  const cityV = cityWideV();
+  const titles = {
+    containment: '🟢 CONTAINMENT — Victory!',
+    overwhelmed:  '🔴 OVERWHELMED — Defeat',
+    endemic:      '🟡 ENDEMIC STALEMATE',
+  };
+  const descs = {
+    containment: 'Infectious spread has been eliminated. The city is safe thanks to your interventions.',
+    overwhelmed:  `The Deceased fraction crossed ${(LOSE_THRESHOLD*100).toFixed(0)}%. The healthcare system collapsed.`,
+    endemic:      '20 weeks passed with the outbreak unresolved. The virus has become endemic.',
+  };
+  document.getElementById('end-title').textContent = titles[outcome];
+  document.getElementById('end-desc').textContent = descs[outcome];
+  document.getElementById('end-title').style.color =
+    outcome==='containment'?'#4ade80':outcome==='overwhelmed'?'#f87171':'#fbbf24';
+
+  // Stats
+  const maxInf = Math.max(...G.history.map(h=>h.cityInf));
+  const finalScore = G.totalPossibleScore > 0
+    ? Math.round(G.totalScore / G.totalPossibleScore * 100) : 0;
+  const scoreColor = finalScore >= 80 ? '#4ade80' : finalScore >= 60 ? '#60a5fa' : finalScore >= 40 ? '#fbbf24' : '#f87171';
+  const gradeLabel = finalScore >= 90 ? 'S' : finalScore >= 80 ? 'A' : finalScore >= 70 ? 'B' : finalScore >= 60 ? 'C' : finalScore >= 40 ? 'D' : 'F';
+  const statsHtml = `
+    <div class="end-stat"><div class="label">Final Week</div><div class="value" style="color:var(--teal-light)">${G.week-1}</div></div>
+    <div class="end-stat"><div class="label">Final Deceased</div><div class="value" style="color:#f87171">${(cityV[4]*100).toFixed(1)}%</div></div>
+    <div class="end-stat"><div class="label">Peak Infectious</div><div class="value" style="color:#fb923c">${(maxInf*100).toFixed(1)}%</div></div>
+    <div class="end-stat"><div class="label">Tokens Remaining</div><div class="value" style="color:var(--token)">${G.tokens}</div></div>
+    <div class="end-stat" style="grid-column:1/-1">
+      <div class="label">Oracle Score — How closely you followed optimal play</div>
+      <div class="value" style="color:${scoreColor}">${finalScore}% <span style="font-size:18px">(Grade ${gradeLabel})</span></div>
+      <div style="background:#0a0f1a;border-radius:4px;height:12px;overflow:hidden;margin-top:6px">
+        <div style="height:100%;border-radius:4px;background:${scoreColor};width:${finalScore}%;transition:width 1s"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${G.totalScore} / ${G.totalPossibleScore} points &nbsp;|&nbsp; ${G.weekScores.filter(w=>w.grade==='Perfect').length} Perfect weeks &nbsp;|&nbsp; ${G.weekScores.filter(w=>w.grade==='Great').length} Great weeks</div>
+    </div>
+  `;
+  document.getElementById('end-stats').innerHTML = statsHtml;
+
+  // Draw canvas chart
+  drawEndChart();
+
+  document.getElementById('end-screen').classList.add('show');
+}
+
+function drawEndChart() {
+  const canvas = document.getElementById('end-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth || 580;
+  canvas.height = 200;
+  const W = canvas.width, H = canvas.height;
+  const PAD = { top:20, right:20, bottom:30, left:40 };
+
+  ctx.fillStyle = '#0a0f1a';
+  ctx.fillRect(0,0,W,H);
+
+  if (G.history.length < 2) return;
+
+  const drawLine = (data, color) => {
+    ctx.beginPath();
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    data.forEach((val,i) => {
+      const x = PAD.left + (i/(data.length-1))*(W-PAD.left-PAD.right);
+      const y = H - PAD.bottom - val*(H-PAD.top-PAD.bottom);
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  };
+
+  const infData  = G.history.map(h=>h.cityInf);
+  const deadData = G.history.map(h=>h.cityDead);
+
+  drawLine(infData,  '#dc2626');
+  drawLine(deadData, '#6b7280');
+
+  // Axes
+  ctx.strokeStyle = '#1e3a5f'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD.left, PAD.top); ctx.lineTo(PAD.left, H-PAD.bottom); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(PAD.left, H-PAD.bottom); ctx.lineTo(W-PAD.right, H-PAD.bottom); ctx.stroke();
+
+  // Labels
+  ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif';
+  ctx.fillText('Wk 1', PAD.left, H-8);
+  ctx.fillText(`Wk ${G.history.length}`, W-PAD.right-20, H-8);
+  ctx.fillStyle='#dc2626'; ctx.fillText('— Infectious', W-130, PAD.top+10);
+  ctx.fillStyle='#6b7280'; ctx.fillText('— Deceased',   W-130, PAD.top+24);
+}
+
+// ═══════════════════════════════════════════════════════
+//  HINT ENGINE
+// ═══════════════════════════════════════════════════════
+
+// dangerScore: lower is better.
+// Weights: Deceased accumulation is the lose condition (weight 3),
+// Infectious drives future hospitalizations (weight 2),
+// Hospitalized is the pipeline to Deceased (weight 2).
+function dangerScore(districts) {
+  let score = 0;
+  for (const d of districts) {
+    score += d.v[1] * 2.0;  // Infectious
+    score += d.v[2] * 2.0;  // Hospitalized
+    score += d.v[4] * 3.0;  // Deceased (highest weight — this is the lose condition)
+  }
+  return score / districts.length;
+}
+
+// Simulate N weeks forward from a snapshot of districts, return final danger score
+function simulateForward(districtSnapshot, weeks) {
+  let ds = districtSnapshot.map(d => ({
+    v: [...d.v],
+    T: deepCopy(d.T),
+    activePolicies: d.activePolicies.map(ap => ({...ap})),
+    activeEvents:   d.activeEvents.map(ae => ({...ae})),
+  }));
+
+  for (let w = 0; w < weeks; w++) {
+    for (const d of ds) {
+      const T = effectiveT(d);
+      d.v = stepMarkov(d.v, T);
+      d.activePolicies = d.activePolicies.filter(ap => { --ap.weeksLeft; return ap.weeksLeft > 0; });
+      d.activeEvents   = d.activeEvents.filter(ae => { --ae.weeksLeft; return ae.weeksLeft > 0; });
+    }
+  }
+  return dangerScore(ds);
+}
+
+// Apply a hypothetical policy to a snapshot without mutating game state
+function applyHypotheticalPolicy(districtSnapshot, policyId, districtIdx) {
+  const ds = districtSnapshot.map((d, i) => ({
+    v: [...d.v],
+    T: deepCopy(d.T),
+    activePolicies: d.activePolicies.map(ap => ({...ap})),
+    activeEvents:   d.activeEvents.map(ae => ({...ae})),
+  }));
+  const pol = POLICIES.find(p => p.id === policyId);
+  if (pol) {
+    ds[districtIdx].activePolicies.push({ policyId, weeksLeft: pol.duration });
+  }
+  return ds;
+}
+
+// calcBestMove: evaluates every (policy × district) option + "do nothing"
+// Returns { policyId, districtIdx, reason, dangerNow, dangerBest, dangerDoNothing }
+function calcBestMove() {
+  const LOOKAHEAD = 5; // weeks to simulate forward for each candidate
+  const snapshot = G.districts;
+
+  const doNothingDanger = simulateForward(snapshot, LOOKAHEAD);
+
+  let best = null;
+  let bestDanger = Infinity;
+
+  for (const pol of POLICIES) {
+    for (let di = 0; di < G.districts.length; di++) {
+      const d = G.districts[di];
+      // Skip if already active in this district or no tokens
+      if (d.activePolicies.some(ap => ap.policyId === pol.id)) continue;
+      // Skip if player has no tokens (hint still shows but marks as unaffordable)
+
+      const hypoDs = applyHypotheticalPolicy(snapshot, pol.id, di);
+      const danger = simulateForward(hypoDs, LOOKAHEAD);
+
+      if (danger < bestDanger) {
+        bestDanger = danger;
+        best = { policyId: pol.id, districtIdx: di, danger };
+      }
+    }
+  }
+
+  if (!best) {
+    return { policyId: null, districtIdx: null, dangerBest: doNothingDanger,
+      dangerDoNothing: doNothingDanger, reason: 'All policies already active or no options available.' };
+  }
+
+  const pol = POLICIES.find(p => p.id === best.policyId);
+  const distName = DISTRICTS[best.districtIdx];
+  const d = G.districts[best.districtIdx];
+  const improvement = ((doNothingDanger - bestDanger) / doNothingDanger * 100).toFixed(0);
+  const urgent = d.v[2] > 0.05 ? '🚨 High hospitalization — ' : d.v[1] > 0.05 ? '⚠ Rising infection — ' : '';
+
+  // Build human-readable reason
+  let reason = '';
+  if (pol.id === 'hospital') {
+    reason = `${urgent}${distName} has the highest combined I+H burden. Hospital Support halves the lethal H→D rate.`;
+  } else if (pol.id === 'vaccinate') {
+    reason = `${urgent}${distName} still has many Susceptible residents. Vaccination cuts the S→I pipeline by 50%.`;
+  } else if (pol.id === 'quarantine') {
+    reason = `${urgent}Quarantine in ${distName} reduces both new infections and hospitalizations simultaneously.`;
+  } else {
+    reason = `${urgent}Awareness in ${distName} slows reinfection of recovered residents, protecting long-term immunity.`;
+  }
+  reason += ` Reduces 5-week danger by ~${improvement}%.`;
+
+  const affordable = G.tokens >= pol.cost;
+  if (!affordable) reason = `⚠ Need more tokens — save up! Best move when affordable: ${pol.name} in ${distName}. ` + reason;
+
+  return {
+    policyId: best.policyId,
+    districtIdx: best.districtIdx,
+    pol,
+    distName,
+    reason,
+    affordable,
+    dangerBest: bestDanger,
+    dangerDoNothing: doNothingDanger,
+    improvement: parseFloat(improvement),
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+//  SCORING ENGINE
+// ═══════════════════════════════════════════════════════
+
+// scoreWeek: compare what the player actually deployed this week
+// against the optimal hint. Returns score + bonus tokens.
+//
+// Scoring rubric (max 100 per week):
+//   +60 pts — deployed the exact recommended policy
+//   +30 pts — deployed it to the exact recommended district
+//   +10 pts — deployed any policy to any district (effort credit)
+//   ─────────────────────────────────────────────────────
+//   Penalty: -20 if player had tokens and deployed nothing (missed opportunity)
+//
+// Token bonus:
+//   90-100 → +3 bonus tokens  (Perfect)
+//   70-89  → +2 bonus tokens  (Great)
+//   50-69  → +1 bonus token   (Good)
+//   0-49   → +0 bonus tokens  (Suboptimal)
+//   (No penalty tokens — base token still awarded separately)
+function scoreWeek() {
+  const hint = G.hint;
+  const deployments = G.deploymentsThisWeek; // [{policyId, districtIdx}]
+  const hadTokens = G.tokens > 0 || deployments.length > 0; // if they spent tokens they had them
+
+  if (!hint || !hint.policyId) {
+    // No meaningful move was available (all policies active)
+    return { playerScore: 100, maxScore: 100, grade: 'Perfect', tokensAwarded: 3,
+             note: 'No beneficial move available — full score.' };
+  }
+
+  let score = 0;
+
+  if (deployments.length === 0) {
+    // Player deployed nothing
+    // If they had no tokens, they get neutral credit; if they had tokens, mild penalty
+    score = hadTokens ? 20 : 60;
+  } else {
+    // Effort credit for deploying anything
+    score += 10;
+
+    // Check if any deployment matches the hint
+    const matchedPolicy   = deployments.some(dep => dep.policyId === hint.policyId);
+    const matchedDistrict = deployments.some(dep => dep.policyId === hint.policyId && dep.districtIdx === hint.districtIdx);
+
+    if (matchedPolicy)   score += 60;
+    if (matchedDistrict) score += 30;
+
+    // Partial credit: deployed to a different district but right policy (district matters less)
+    if (matchedPolicy && !matchedDistrict) score += 10; // already counted in matchedPolicy, bonus for effort
+  }
+
+  score = Math.min(100, Math.max(0, score));
+
+  // Grade + token award
+  let grade, tokensAwarded;
+  if (score >= 90)      { grade = 'Perfect';    tokensAwarded = 3; }
+  else if (score >= 70) { grade = 'Great';      tokensAwarded = 2; }
+  else if (score >= 50) { grade = 'Good';       tokensAwarded = 1; }
+  else                  { grade = 'Suboptimal'; tokensAwarded = 0; }
+
+  return { playerScore: score, maxScore: 100, grade, tokensAwarded,
+           note: `Hint was: ${hint.pol.icon} ${hint.pol.name} → ${hint.distName}` };
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════
+
+function render() {
+  renderTopBar();
+  renderMap();
+  renderMatrix();
+  renderPopBars();
+  renderPolicies();
+  renderForecast();
+  renderHint();
+  renderEventCard();
+  renderActivePolicies();
+  renderLog();
+  renderButtons();
+}
+
+function toggleHint() {
+  G.hintVisible = !G.hintVisible;
+  getEl('hint-toggle').textContent = G.hintVisible ? 'Hide' : 'Show';
+  getEl('hint-body').style.display = G.hintVisible ? '' : 'none';
+}
+
+function renderHint() {
+  const body = getEl('hint-body');
+  if (!G.hintVisible) { body.style.display = 'none'; return; }
+  body.style.display = '';
+
+  const hint = G.hint;
+  const totalPct = G.totalPossibleScore > 0
+    ? Math.round(G.totalScore / G.totalPossibleScore * 100) : null;
+
+  // Update score chip in top bar
+  getEl('score-display').textContent =
+    totalPct !== null ? totalPct + '%' : '—';
+
+  if (!hint) { body.innerHTML = 'Analyzing...'; return; }
+
+  // Last week's result
+  const last = G.weekScores[G.weekScores.length - 1];
+  const gradeColors = { Perfect:'#4ade80', Great:'#60a5fa', Good:'#fbbf24', Suboptimal:'#f87171' };
+  const gradeEmoji  = { Perfect:'⭐', Great:'✅', Good:'👍', Suboptimal:'💡' };
+  const lastGradeHtml = last
+    ? `<div id="hint-last-grade" style="color:${gradeColors[last.grade]}">
+        ${gradeEmoji[last.grade]} Last week: <strong>${last.grade}</strong>
+        (${last.playerScore}/100) → +${last.tokensAwarded} bonus 🎫
+       </div>`
+    : '';
+
+  // Cumulative score bar
+  const scorePct = totalPct !== null ? totalPct : 0;
+  const barColor = scorePct >= 80 ? '#4ade80' : scorePct >= 60 ? '#60a5fa' : scorePct >= 40 ? '#fbbf24' : '#f87171';
+  const scoreHtml = G.weekScores.length > 0 ? `
+    <div class="hint-score">
+      <div style="font-size:11px;color:var(--muted)">Overall score: ${G.totalScore} / ${G.totalPossibleScore} (${scorePct}%)</div>
+      <div class="score-bar-wrap">
+        <div class="score-bar-fill" style="width:${scorePct}%;background:${barColor}"></div>
+      </div>
+    </div>` : '';
+
+  // Best move recommendation
+  if (!hint.policyId) {
+    body.innerHTML = `<div>${hint.reason}</div>${lastGradeHtml}${scoreHtml}`;
+    return;
+  }
+
+  const canAfford = G.tokens >= hint.pol.cost;
+  const affordBadge = canAfford
+    ? `<span style="color:#4ade80;font-size:11px">✓ Affordable</span>`
+    : `<span style="color:#f87171;font-size:11px">⚠ Need ${hint.pol.cost} token</span>`;
+
+  const improvePct = hint.improvement > 0 ? `↓${hint.improvement}% danger` : 'marginal improvement';
+
+  body.innerHTML = `
+    <div style="margin-bottom:5px;font-size:11px;color:var(--muted)">Best move this week:</div>
+    <div class="hint-action">${hint.pol.icon} ${hint.pol.name} → ${hint.distName}</div>
+    ${affordBadge}
+    <div class="hint-reason">${hint.reason}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:5px">
+      Do nothing: danger <strong style="color:#f87171">${hint.dangerDoNothing.toFixed(3)}</strong>
+      &nbsp;→&nbsp;
+      With hint: danger <strong style="color:#4ade80">${hint.dangerBest.toFixed(3)}</strong>
+      &nbsp;(<strong>${improvePct}</strong>)
+    </div>
+    ${lastGradeHtml}
+    ${scoreHtml}
+  `;
+}
+
+function renderTopBar() {
+  const cv = cityWideV();
+  const deadPct = (cv[4]*100).toFixed(1)+'%';
+  const infPct  = (cv[1]*100).toFixed(1)+'%';
+  getEl('week-indicator').innerHTML = `Week <strong>${G.week}</strong> / ${MAX_WEEKS}`;
+  getEl('token-display').textContent = G.tokens;
+  getEl('dead-display').textContent  = deadPct;
+  getEl('inf-display').textContent   = infPct;
+  const dc = getEl('dead-chip');
+  dc.className = 'stat-chip' + (cv[4]>=0.10?' danger':cv[4]>=0.05?' warning':'');
+}
+
+function renderMap() {
+  const grid = getEl('district-grid');
+  grid.innerHTML = '';
+  G.districts.forEach((d,i) => {
+    const maxI = d.v.indexOf(Math.max(...d.v.slice(0,4))); // dominant state (excl D for color)
+    const colors = ['d-susceptible','d-infectious','d-hospitalized','d-recovering'];
+    const dc = d.v[4] > 0.08 ? 'd-deceased' : colors[Math.min(maxI,3)];
+    const tile = document.createElement('div');
+    tile.className = 'district-tile ' + dc + (G.selectedDistrict===i?' selected':'');
+    tile.tabIndex = 0; // allow keyboard focus
+    tile.innerHTML = `<div class="d-name">${d.name}</div><div class="d-inf">💀 ${(d.v[4]*100).toFixed(1)}%</div>`;
+    tile.onclick = () => { G.selectedDistrict = i; render(); };
+    tile.onkeypress = (e) => { if (e.key === 'Enter' || e.key === ' ') { G.selectedDistrict = i; render(); } };
+    grid.appendChild(tile);
+  });
+}
+
+function renderMatrix() {
+  const d = G.districts[G.selectedDistrict];
+  document.getElementById('district-label').textContent = `📊 ${d.name} District — Transition Matrix T`;
+  document.getElementById('policy-target').textContent = d.name;
+  const T = effectiveT(d);
+  const highlightCells = G.selectedPolicy ? G.selectedPolicy.cells : [];
+  const body = document.getElementById('matrix-body');
+  body.innerHTML = '';
+  STATES.forEach((fromS, i) => {
+    const tr = document.createElement('tr');
+    const labelTd = document.createElement('td');
+    labelTd.className = 'row-label'; labelTd.textContent = fromS;
+    tr.appendChild(labelTd);
+    STATES.forEach((toS, j) => {
+      const td = document.createElement('td');
+      const v = T[i][j];
+      // Color intensity
+      const alpha = Math.min(v * 2, 1);
+      const r = Math.round(13 + 147*alpha), g = Math.round(58 + 80*alpha), b = Math.round(72 + 60*alpha);
+      td.style.background = `rgb(${r},${g},${b})`;
+      td.style.color = alpha > 0.5 ? '#fff' : '#94a3b8';
+      td.textContent = v.toFixed(2);
+      const isHL = highlightCells.some(([ci,cj])=>ci===i&&cj===j);
+      if (isHL) td.classList.add('cell-highlight');
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+}
+
+function renderPopBars() {
+  const d = G.districts[G.selectedDistrict];
+  const cont = document.getElementById('bars-container');
+  cont.innerHTML = '';
+  STATES.forEach((s,i) => {
+    const pct = (d.v[i]*100).toFixed(1);
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML = `
+      <div class="bar-label">${STATE_NAMES[s]}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${STATE_COLORS[s]}"></div></div>
+      <div class="bar-pct" style="color:${STATE_COLORS[s]}">${pct}%</div>
+    `;
+    cont.appendChild(row);
+  });
+}
+
+function renderPolicies() {
+  const btns = document.getElementById('policy-buttons');
+  btns.innerHTML = '';
+  POLICIES.forEach(pol => {
+    const d = G.districts[G.selectedDistrict];
+    const alreadyActive = d.activePolicies.some(ap=>ap.policyId===pol.id);
+    const btn = document.createElement('button');
+    btn.className = 'policy-btn' + (G.selectedPolicy?.id===pol.id?' active-policy':'');
+    btn.disabled = G.tokens < pol.cost || alreadyActive;
+    btn.innerHTML = `
+      <span class="policy-icon">${pol.icon}</span>
+      <div class="policy-info">
+        <div class="policy-name">${pol.name}</div>
+        <div class="policy-desc">${pol.desc} (${pol.duration} weeks)</div>
+        ${alreadyActive?'<div style="color:#4ade80;font-size:11px">✓ Already active</div>':''}
+      </div>
+      <div class="policy-cost">🎫×${pol.cost}</div>
+    `;
+    btn.onclick = () => {
+      G.selectedPolicy = (G.selectedPolicy?.id === pol.id) ? null : pol;
+      render();
+    };
+    btns.appendChild(btn);
+  });
+}
+
+function renderForecast() {
+  const d = G.districts[G.selectedDistrict];
+  const T = effectiveT(d);
+  const ss = steadyState(T);
+  const cont = document.getElementById('forecast-bars');
+  cont.innerHTML = '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+d.name+' long-run projection</div>';
+  STATES.forEach((s,i) => {
+    const pct = (ss[i]*100).toFixed(1);
+    const row = document.createElement('div');
+    row.className = 'forecast-bar-row';
+    row.innerHTML = `
+      <div class="forecast-label">${STATE_NAMES[s]}</div>
+      <div class="forecast-track"><div class="forecast-fill" style="width:${pct}%;background:${STATE_COLORS[s]}"></div></div>
+      <div class="forecast-pct" style="color:${STATE_COLORS[s]}">${pct}%</div>
+    `;
+    cont.appendChild(row);
+  });
+}
+
+function renderEventCard() {
+  const card = document.getElementById('event-card');
+  if (G.lastEvent) {
+    card.classList.add('show');
+    document.getElementById('event-text').textContent = G.lastEvent.desc;
+    document.getElementById('event-text').previousElementSibling.textContent = '⚠ ' + G.lastEvent.name;
+  } else {
+    card.classList.remove('show');
+  }
+}
+
+function renderActivePolicies() {
+  const list = document.getElementById('active-policies-list');
+  const allActive = G.districts.flatMap(d =>
+    d.activePolicies.map(ap => {
+      const pol = POLICIES.find(p=>p.id===ap.policyId);
+      return `${pol.icon} ${pol.name} → ${d.name} (${ap.weeksLeft}w)`;
+    })
+  );
+  list.innerHTML = allActive.length ? allActive.map(a=>`<div style="margin-bottom:3px;color:var(--teal-light)">${a}</div>`).join('') : 'None';
+}
+
+function renderLog() {
+  const el = document.getElementById('week-log');
+  if (G.lastLog) el.innerHTML = G.lastLog.replace(/⚠/g,'<span style="color:#fb923c">⚠</span>').replace(/✅/g,'<span style="color:#4ade80">✅</span>');
+}
+
+function renderButtons() {
+  const deployBtn = document.getElementById('deploy-btn');
+  const hasPolicy = !!G.selectedPolicy;
+  const hasTokens = G.tokens >= 1;
+  const notActive = G.selectedPolicy ? !G.districts[G.selectedDistrict].activePolicies.some(ap=>ap.policyId===G.selectedPolicy.id) : true;
+  deployBtn.disabled = !hasPolicy || !hasTokens || !notActive || G.gameOver;
+  deployBtn.textContent = hasPolicy
+    ? `Deploy ${G.selectedPolicy.icon} ${G.selectedPolicy.name} to ${G.districts[G.selectedDistrict].name}`
+    : 'Select a policy & district';
+
+  document.getElementById('next-btn').disabled = G.gameOver;
+}
+
+// ═══════════════════════════════════════════════════════
+//  EVENTS
+// ═══════════════════════════════════════════════════════
+getEl('deploy-btn').addEventListener('click', deployPolicy);
+getEl('next-btn').addEventListener('click', advanceWeek);
+getEl('hint-toggle').addEventListener('click', toggleHint);
+getEl('restart-btn').addEventListener('click', initGame);
+
+// ensure keyboard users can toggle hints via Enter key as well
+getEl('hint-toggle').addEventListener('keypress', e => {
+  if (e.key === 'Enter' || e.key === ' ') toggleHint();
+});
+
+// ═══════════════════════════════════════════════════════
+//  START
+// ═══════════════════════════════════════════════════════
+initGame();
+</script>
+</body>
+</html>
